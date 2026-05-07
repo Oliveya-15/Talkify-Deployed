@@ -1,0 +1,11 @@
+streamlit
+python-dotenv
+PyPDF2
+langchain==0.3.25
+langchain-core==0.3.85
+langchain-community==0.3.21
+langchain-groq==0.2.3
+langchain-huggingface==0.1.2
+langchain-text-splitters==0.3.11
+faiss-cpu
+sentence-transformers
