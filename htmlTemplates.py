@@ -1,3 +1,5 @@
+# htmlTemplates.py
+
 import base64
 
 
@@ -46,19 +48,26 @@ css = """
         margin-bottom: 1.5rem;
     }
 
-    /* Chat message bubbles (dark backgrounds, white text) */
+    /* ----- Chat message bubbles – soft, theme‑friendly, with personality ----- */
     .chat-message {
         padding: 1.5rem;
         border-radius: 0.5rem;
         margin-bottom: 1rem;
         display: flex;
         align-items: flex-start;
+        transition: background 0.3s ease;
     }
+    /* User message – subtle bluish tint */
     .chat-message.user {
-        background-color: #2b313e;
+        background: rgba(100, 149, 237, 0.08);
+        border-left: 4px solid #6e8efb;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
+    /* Bot message – subtle grayish tint */
     .chat-message.bot {
-        background-color: #475063;
+        background: rgba(150, 150, 150, 0.06);
+        border-left: 4px solid #a0a0a0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
     .chat-message .avatar {
         width: 20%;
@@ -72,7 +81,7 @@ css = """
     .chat-message .message {
         width: 80%;
         padding: 0 1.5rem;
-        color: #fff;
+        color: var(--text-color);          /* adapts to light/dark mode */
         font-size: 16px;
         line-height: 1.6;
     }
