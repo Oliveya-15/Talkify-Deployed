@@ -3,7 +3,8 @@ import base64
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
-from langchain_text_splitters import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
@@ -22,37 +23,66 @@ def get_base64(file_path):
 logo_img = get_base64("logo.png")
 
 
-def get_pdf_text(pdf_docs):
-    """Extract text from a list of uploaded PDF files."""
-    text = ""
+def get_pdf_documents(pdf_docs):
+    """Extract text page-by-page from uploaded PDFs, keeping track of which
+    file and page each block of text came from.
+
+    Returns a list of dicts: {"text": ..., "source": filename, "page": page_num}
+    Tracking this now means later features (citations, hybrid search
+    debugging, the agentic router's document tool) all get this metadata
+    for free instead of needing a rewrite later.
+    """
+    pages = []
     for pdf in pdf_docs:
+        source_name = getattr(pdf, "name", "uploaded.pdf")
         pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
+        for page_num, page in enumerate(pdf_reader.pages, start=1):
             page_text = page.extract_text()
-            if page_text:
-                text += page_text
-    return text
+            if page_text and page_text.strip():
+                pages.append({
+                    "text": page_text,
+                    "source": source_name,
+                    "page": page_num
+                })
+    return pages
 
 
-def get_text_chunks(text):
-    """Split text into overlapping chunks for embedding."""
-    text_splitter = CharacterTextSplitter(
-        separator="\n",
+def get_text_chunks(pages):
+    """Split each page's text into overlapping, structure-aware chunks.
+
+    RecursiveCharacterTextSplitter tries paragraph breaks first, then
+    sentences, then words -- so it avoids slicing a sentence in half the
+    way the old CharacterTextSplitter (naive '\\n' splits) sometimes did.
+    Each resulting chunk becomes a LangChain Document carrying its
+    source file + page number as metadata.
+    """
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
-        length_function=len
+        length_function=len,
+        separators=["\n\n", "\n", ". ", " ", ""]
     )
-    chunks = text_splitter.split_text(text)
-    return chunks
+
+    documents = []
+    for page in pages:
+        page_chunks = splitter.split_text(page["text"])
+        for chunk in page_chunks:
+            documents.append(
+                Document(
+                    page_content=chunk,
+                    metadata={"source": page["source"], "page": page["page"]}
+                )
+            )
+    return documents
 
 
-def get_vectorstore(text_chunks):
-    """Create a FAISS vector store from text chunks using HuggingFace embeddings."""
+def get_vectorstore(documents):
+    """Create a FAISS vector store from Document chunks using HuggingFace embeddings."""
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={'device': 'cpu'}
     )
-    vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
+    vectorstore = FAISS.from_documents(documents=documents, embedding=embeddings)
     return vectorstore
 
 
@@ -65,12 +95,14 @@ def get_conversation_chain(vectorstore):
     )
     memory = ConversationBufferMemory(
         memory_key='chat_history',
-        return_messages=True
+        return_messages=True,
+        output_key='answer'
     )
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vectorstore.as_retriever(),
-        memory=memory
+        memory=memory,
+        return_source_documents=True
     )
     return conversation_chain
 
@@ -81,8 +113,9 @@ def handle_userinput(user_question):
         st.warning("Please upload and process PDFs first.")
         return
 
-    response = st.session_state.conversation({'question': user_question})
+    response = st.session_state.conversation.invoke({'question': user_question})
     st.session_state.chat_history = response['chat_history']
+    st.session_state.last_sources = response.get('source_documents', [])
 
     for i, message in enumerate(st.session_state.chat_history):
         if i % 2 == 0:
@@ -95,6 +128,17 @@ def handle_userinput(user_question):
                 bot_template.replace("{{MSG}}", message.content),
                 unsafe_allow_html=True
             )
+
+    if st.session_state.last_sources:
+        with st.expander("📎 Sources for this answer"):
+            seen = set()
+            for doc in st.session_state.last_sources:
+                source = doc.metadata.get("source", "unknown file")
+                page = doc.metadata.get("page", "?")
+                key = (source, page)
+                if key not in seen:
+                    seen.add(key)
+                    st.caption(f"**{source}** — page {page}")
 
 
 def main():
@@ -111,6 +155,8 @@ def main():
         st.session_state.conversation = None
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    if "last_sources" not in st.session_state:
+        st.session_state.last_sources = []
 
     # ---------- Custom header ----------
     st.markdown(
@@ -145,8 +191,11 @@ def main():
                 return
 
             with st.spinner("Processing..."):
-                raw_text = get_pdf_text(pdf_docs)
-                text_chunks = get_text_chunks(raw_text)
+                pdf_pages = get_pdf_documents(pdf_docs)
+                if not pdf_pages:
+                    st.error("Couldn't extract any text from those PDFs. They may be scanned images without a text layer.")
+                    return
+                text_chunks = get_text_chunks(pdf_pages)
                 vectorstore = get_vectorstore(text_chunks)
                 st.session_state.conversation = get_conversation_chain(vectorstore)
 
