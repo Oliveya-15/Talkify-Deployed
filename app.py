@@ -29,7 +29,7 @@ def get_pdf_documents(pdf_docs):
 
     Returns a list of dicts: {"text": ..., "source": filename, "page": page_num}
     Tracking this now means later features (citations, hybrid search
-    debugging, the agentic router's document tool) all get this metadata
+    debugging, the agentic router's document tool) get this metadata
     for free instead of needing a rewrite later.
     """
     pages = []
@@ -89,7 +89,7 @@ def get_vectorstore(documents):
 def get_conversation_chain(vectorstore):
     """Build a conversational retrieval chain with memory."""
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         temperature=0,
         groq_api_key=os.getenv("GROQ_API_KEY")
     )
@@ -105,6 +105,32 @@ def get_conversation_chain(vectorstore):
         return_source_documents=True
     )
     return conversation_chain
+
+
+def clean_response(text):
+    """Clean Markdown formatting from AI responses for a professional display."""
+    # Remove bold and italic Markdown markers
+    text = text.replace("**", "")
+    text = text.replace("__", "")
+
+    # Remove Markdown headings
+    text = text.replace("### ", "")
+    text = text.replace("## ", "")
+    text = text.replace("# ", "")
+
+    # Convert Markdown bullet points to professional bullet points
+    lines = []
+    for line in text.splitlines():
+        line = line.strip()
+
+        if line.startswith("* "):
+            line = "• " + line[2:]
+        elif line.startswith("- "):
+            line = "• " + line[2:]
+
+        lines.append(line)
+
+    return "\n".join(lines).strip()
 
 
 def handle_userinput(user_question):
@@ -124,8 +150,10 @@ def handle_userinput(user_question):
                 unsafe_allow_html=True
             )
         else:
+            cleaned_message = clean_response(message.content)
+
             st.write(
-                bot_template.replace("{{MSG}}", message.content),
+                bot_template.replace("{{MSG}}", cleaned_message),
                 unsafe_allow_html=True
             )
 

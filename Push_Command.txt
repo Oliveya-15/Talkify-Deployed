@@ -1,0 +1,105 @@
+For this format :-
+VS Code
+      │
+      ├── Talkify-Deployed  ← Develop here
+      │          │
+      │          └── Streamlit
+      │
+      └── Talkify-PDF-LangChain-Core  ← Frozen backup
+
+
+=========================================
+TALKIFY GIT WORKFLOW
+=========================================
+
+Repositories:
+
+1. Talkify-PDF-LangChain-Core
+   - Original project
+   - DO NOT PUSH NEW FEATURES HERE
+   - Keep as backup/reference
+
+2. Talkify-Deployed
+   - Main development repository
+   - Connected to Streamlit Cloud
+   - All new features go here
+
+
+=========================================
+CHECK CURRENT BRANCH
+=========================================
+
+git branch
+
+Current development branch should be:
+
+talkify-latest-backup
+
+
+=========================================
+RUN PROJECT
+=========================================
+
+streamlit run app.py
+
+
+=========================================
+SAVE CHANGES
+=========================================
+
+git add .
+git commit -m "Describe your changes"
+
+
+=========================================
+DEPLOY TO STREAMLIT
+=========================================
+
+Since development is on:
+
+talkify-latest-backup
+
+Push to Talkify-Deployed main:
+
+git push deployed talkify-latest-backup:main
+
+
+=========================================
+NEVER RUN
+=========================================
+
+git push origin main
+
+unless you intentionally want to update
+Talkify-PDF-LangChain-Core.
+
+
+=========================================
+CHECK STATUS
+=========================================
+
+git status
+
+git log --oneline --decorate --all --max-count=10
+
+
+=========================================
+REMOTES
+=========================================
+
+origin   = Talkify-PDF-LangChain-Core
+
+deployed = Talkify-Deployed
+
+
+=========================================
+IMPORTANT
+=========================================
+
+Streamlit is connected to:
+
+Talkify-Deployed
+
+NOT
+
+Talkify-PDF-LangChain-Core    
